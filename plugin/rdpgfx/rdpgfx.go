@@ -13,6 +13,7 @@ const (
 )
 
 type gfxClient struct {
+	w core.ChannelSender
 }
 
 func (c *gfxClient) Send(s []byte) (int, error) {
@@ -20,9 +21,11 @@ func (c *gfxClient) Send(s []byte) (int, error) {
 	name, _ := c.GetType()
 	return c.w.SendToChannel(name, s)
 }
+
 func (c *gfxClient) Sender(f core.ChannelSender) {
 	c.w = f
 }
+
 func (c *gfxClient) GetType() (string, uint32) {
 	return ChannelName, 0
 }
