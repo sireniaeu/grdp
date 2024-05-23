@@ -166,6 +166,7 @@ func (m *ChallengeMessage) getTargetInfo() []byte {
 	start := m.TargetInfoBufferOffset - offset
 	return m.Payload[start : start+uint32(m.TargetInfoLen)]
 }
+
 func (m *ChallengeMessage) getTargetName() []byte {
 	if m.TargetNameLen == 0 {
 		return make([]byte, 0)
@@ -174,6 +175,7 @@ func (m *ChallengeMessage) getTargetName() []byte {
 	start := m.TargetNameBufferOffset - offset
 	return m.Payload[start : start+uint32(m.TargetNameLen)]
 }
+
 func (m *ChallengeMessage) getTargetInfoTimestamp(data []byte) []byte {
 	r := bytes.NewReader(data)
 	for r.Len() > 0 {
@@ -222,7 +224,8 @@ func (m *AuthenticateMessage) BaseLen() uint32 {
 }
 
 func NewAuthenticateMessage(negFlag uint32, domain, user, workstation []byte,
-	lmchallResp, ntchallResp, enRandomSessKey []byte) *AuthenticateMessage {
+	lmchallResp, ntchallResp, enRandomSessKey []byte,
+) *AuthenticateMessage {
 	msg := &AuthenticateMessage{
 		Signature:      [8]byte{'N', 'T', 'L', 'M', 'S', 'S', 'P', 0x00},
 		MessageType:    0x00000003,
@@ -313,10 +316,10 @@ func (n *NTLMv2) GetNegotiateMessage() *NegotiateMessage {
 	return n.negotiateMessage
 }
 
-//  process NTLMv2 Authenticate hash
+// process NTLMv2 Authenticate hash
 func (n *NTLMv2) ComputeResponseV2(respKeyNT, respKeyLM, serverChallenge, clientChallenge,
-	timestamp, serverInfo []byte) (ntChallResp, lmChallResp, SessBaseKey []byte) {
-
+	timestamp, serverInfo []byte,
+) (ntChallResp, lmChallResp, SessBaseKey []byte) {
 	tempBuff := &bytes.Buffer{}
 	tempBuff.Write([]byte{0x01, 0x01}) // Responser version, HiResponser version
 	tempBuff.Write([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
@@ -410,7 +413,7 @@ func (n *NTLMv2) GetAuthenticateMessage(s []byte) (*AuthenticateMessage, *NTLMv2
 	if challengeMsg.NegotiateFlags&NTLMSSP_NEGOTIATE_UNICODE != 0 {
 		n.enableUnicode = true
 	}
-	glog.Infof("user: %s, passwd:%s", n.user, n.password)
+	glog.Infof("user: %s", n.user)
 	domain, user, _ := n.GetEncodedCredentials()
 
 	n.authenticateMessage = NewAuthenticateMessage(challengeMsg.NegotiateFlags,
@@ -421,21 +424,21 @@ func (n *NTLMv2) GetAuthenticateMessage(s []byte) (*AuthenticateMessage, *NTLMv2
 	}
 
 	md := md5.New()
-	//ClientSigningKey
+	// ClientSigningKey
 	a := concat(exportedSessionKey, clientSigning)
 	md.Write(a)
 	ClientSigningKey := md.Sum(nil)
-	//ServerSigningKey
+	// ServerSigningKey
 	md.Reset()
 	a = concat(exportedSessionKey, serverSigning)
 	md.Write(a)
 	ServerSigningKey := md.Sum(nil)
-	//ClientSealingKey
+	// ClientSealingKey
 	md.Reset()
 	a = concat(exportedSessionKey, clientSealing)
 	md.Write(a)
 	ClientSealingKey := md.Sum(nil)
-	//ServerSealingKey
+	// ServerSealingKey
 	md.Reset()
 	a = concat(exportedSessionKey, serverSealing)
 	md.Write(a)
@@ -474,7 +477,7 @@ func (n *NTLMv2Security) GssEncrypt(s []byte) []byte {
 	n.EncryptRC4.XORKeyStream(p, s)
 	b := &bytes.Buffer{}
 
-	//signature
+	// signature
 	core.WriteUInt32LE(n.SeqNum, b)
 	core.WriteBytes(s, b)
 	s1 := HMAC_MD5(n.SigningKey, b.Bytes())[:8]
@@ -491,9 +494,10 @@ func (n *NTLMv2Security) GssEncrypt(s []byte) []byte {
 
 	return b.Bytes()
 }
+
 func (n *NTLMv2Security) GssDecrypt(s []byte) []byte {
 	r := bytes.NewReader(s)
-	core.ReadUInt32LE(r) //version
+	core.ReadUInt32LE(r) // version
 	checksum, _ := core.ReadBytes(8, r)
 	seqNum, _ := core.ReadUInt32LE(r)
 	data, _ := core.ReadBytes(r.Len(), r)
