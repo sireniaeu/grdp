@@ -42,7 +42,8 @@ func New(s *core.SocketLayer, ntlm *nla.NTLMv2) *TPKT {
 		Emitter: *emission.NewEmitter(),
 		Conn:    s,
 		secFlag: 0,
-		ntlm:    ntlm}
+		ntlm:    ntlm,
+	}
 	core.StartReadBytes(2, s, t.recvHeader)
 	return t
 }
@@ -84,7 +85,14 @@ func (t *TPKT) recvChallenge(data []byte) error {
 	glog.Debugf("tsreq:%+v", tsreq)
 	// get pubkey
 	pubkey, err := t.Conn.TlsPubKey()
+	if err != nil {
+		return err
+	}
 	glog.Debugf("pubkey=%+v", pubkey)
+
+	if len(tsreq.NegoTokens) == 0 {
+		return fmt.Errorf("no nego tokens")
+	}
 
 	authMsg, ntlmSec := t.ntlm.GetAuthenticateMessage(tsreq.NegoTokens[0].Data)
 	t.ntlmSec = ntlmSec
@@ -115,8 +123,8 @@ func (t *TPKT) recvPubKeyInc(data []byte) error {
 		return err
 	}
 	glog.Trace("PubKeyAuth:", tsreq.PubKeyAuth)
-	//ignore
-	//pubkey := t.ntlmSec.GssDecrypt([]byte(tsreq.PubKeyAuth))
+	// ignore
+	// pubkey := t.ntlmSec.GssDecrypt([]byte(tsreq.PubKeyAuth))
 	domain, username, password := t.ntlm.GetEncodedCredentials()
 	credentials := nla.EncodeDERTCredentials(domain, username, password)
 	authInfo := t.ntlmSec.GssEncrypt(credentials)
