@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/tomatome/grdp/core"
 	"github.com/tomatome/grdp/emission"
 	"github.com/tomatome/grdp/glog"
@@ -22,6 +23,10 @@ import (
 const (
 	FASTPATH_ACTION_FASTPATH = 0x0
 	FASTPATH_ACTION_X224     = 0x3
+)
+
+const (
+	credSspVersion = nla.CredSSPVersion6
 )
 
 /**
@@ -58,7 +63,7 @@ func (t *TPKT) StartNLA() error {
 		glog.Info("start tls failed", err)
 		return err
 	}
-	req := nla.EncodeDERTRequest([]nla.Message{t.ntlm.GetNegotiateMessage()}, nil, nil)
+	req := nla.EncodeDERTRequest(credSspVersion, []nla.Message{t.ntlm.GetNegotiateMessage()}, nil, nil, nil)
 	_, err = t.Conn.Write(req)
 	if err != nil {
 		glog.Info("send NegotiateMessage", err)
@@ -97,8 +102,43 @@ func (t *TPKT) recvChallenge(data []byte) error {
 	authMsg, ntlmSec := t.ntlm.GetAuthenticateMessage(tsreq.NegoTokens[0].Data)
 	t.ntlmSec = ntlmSec
 
-	encryptPubkey := ntlmSec.GssEncrypt(pubkey)
-	req := nla.EncodeDERTRequest([]nla.Message{authMsg}, nil, encryptPubkey)
+	spew.Dump("version", tsreq.Version)
+
+	var req []byte
+
+	if tsreq.Version >= nla.CredSSPVersion5 {
+		// ## Version 5 or 6
+		// The client SHOULD generate a cryptographically random 32-byte value and set the nonce
+		// field of the TSRequest structure to this value. It then computes a SHA256 hash of the ASN.1
+		// encoded SubjectPublicKey concatenated with the bytes of the well-known string “CredSSP Client-
+		// To-Server Binding Hash” and the generated nonce. The hash is then encrypted using the
+		// confidentiality support of the authentication protocol.
+		//
+		// The process is defined as:
+		//
+		// Set ClientServerHashMagic to "CredSSP Client-To-Server Binding Hash"
+		// Set ClientServerHash to SHA256(UNICODE(ClientServerHashMagic), Nonce, SubjectPublicKey)
+		// Set TSRequest.pubKeyAuth to Encrypt(ClientServerHash)
+		//
+		// *Note* the hash MUST include a \0 terminator after the ClientServerHashMagic string
+
+		clientServerHashMagic := "CredSSP Client-To-Server Binding Hash" + string([]byte{0})
+		clientServerHash := ntlmSec.SHA256([]byte(clientServerHashMagic), ntlmSec.Nonce, pubkey)
+		encryptedHash := ntlmSec.GssEncrypt(clientServerHash)
+
+		spew.Dump("nonce", ntlmSec.Nonce)
+		spew.Dump("clientServerHashMagic", clientServerHashMagic)
+		spew.Dump("clientServerHash", clientServerHash)
+
+		req = nla.EncodeDERTRequest(credSspVersion, []nla.Message{authMsg}, nil, encryptedHash, ntlmSec.Nonce)
+
+		glog.Info("using credssp version 5 or 6", hex.EncodeToString(req))
+
+	} else {
+		encryptedPubKey := ntlmSec.GssEncrypt(pubkey)
+		req = nla.EncodeDERTRequest(credSspVersion, []nla.Message{authMsg}, nil, encryptedPubKey, nil)
+	}
+
 	_, err = t.Conn.Write(req)
 	if err != nil {
 		glog.Info("send AuthenticateMessage", err)
@@ -128,7 +168,7 @@ func (t *TPKT) recvPubKeyInc(data []byte) error {
 	domain, username, password := t.ntlm.GetEncodedCredentials()
 	credentials := nla.EncodeDERTCredentials(domain, username, password)
 	authInfo := t.ntlmSec.GssEncrypt(credentials)
-	req := nla.EncodeDERTRequest(nil, authInfo, nil)
+	req := nla.EncodeDERTRequest(credSspVersion, nil, authInfo, nil, nil)
 	_, err = t.Conn.Write(req)
 	if err != nil {
 		glog.Info("send AuthenticateMessage", err)
