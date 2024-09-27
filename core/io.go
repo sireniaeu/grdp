@@ -11,7 +11,7 @@ func StartReadBytes(len int, r io.Reader, cb ReadBytesComplete) {
 	b := make([]byte, len)
 	go func() {
 		_, err := io.ReadFull(r, b)
-		//glog.Debug("StartReadBytes Get", n, "Bytes:", hex.EncodeToString(b))
+		// glog.Debug("StartReadBytes Get", n, "Bytes:", hex.EncodeToString(b))
 		cb(b, err)
 	}()
 }
@@ -129,6 +129,7 @@ func RGB565ToRGB(data uint16) (r, g, b uint8) {
 
 	return
 }
+
 func RGB555ToRGB(data uint16) (r, g, b uint8) {
 	r = uint8(data & 0x7C00 >> 7)
 	g = uint8(data & 0x03E0 >> 2)

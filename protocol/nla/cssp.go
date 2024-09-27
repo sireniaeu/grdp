@@ -6,16 +6,25 @@ import (
 	"github.com/tomatome/grdp/glog"
 )
 
+type CredSSPVersion int
+
+const (
+	CredSSPVersion2 CredSSPVersion = 2
+	CredSSPVersion5 CredSSPVersion = 5
+	CredSSPVersion6 CredSSPVersion = 6
+)
+
 type NegoToken struct {
 	Data []byte `asn1:"explicit,tag:0"`
 }
 
 type TSRequest struct {
-	Version    int         `asn1:"explicit,tag:0"`
-	NegoTokens []NegoToken `asn1:"optional,explicit,tag:1"`
-	AuthInfo   []byte      `asn1:"optional,explicit,tag:2"`
-	PubKeyAuth []byte      `asn1:"optional,explicit,tag:3"`
-	//ErrorCode  int         `asn1:"optional,explicit,tag:4"`
+	Version    CredSSPVersion `asn1:"explicit,tag:0"`
+	NegoTokens []NegoToken    `asn1:"optional,explicit,tag:1"`
+	AuthInfo   []byte         `asn1:"optional,explicit,tag:2"`
+	PubKeyAuth []byte         `asn1:"optional,explicit,tag:3"`
+	ErrorCode  int            `asn1:"optional,explicit,tag:4"`
+	Nonce      []byte         `asn1:"optional,explicit,tag:5"`
 }
 
 type TSCredentials struct {
@@ -44,9 +53,9 @@ type TSSmartCardCreds struct {
 	DomainHint string            `asn1:"explicit,tag:3"`
 }
 
-func EncodeDERTRequest(msgs []Message, authInfo []byte, pubKeyAuth []byte) []byte {
+func EncodeDERTRequest(version CredSSPVersion, msgs []Message, authInfo []byte, pubKeyAuth []byte, nonce []byte) []byte {
 	req := TSRequest{
-		Version: 2,
+		Version: version,
 	}
 
 	if len(msgs) > 0 {
@@ -66,6 +75,14 @@ func EncodeDERTRequest(msgs []Message, authInfo []byte, pubKeyAuth []byte) []byt
 		req.PubKeyAuth = pubKeyAuth
 	}
 
+	if req.ErrorCode != 0 {
+		req.ErrorCode = 0
+	}
+
+	if len(nonce) > 0 {
+		req.Nonce = nonce
+	}
+
 	result, err := asn1.Marshal(req)
 	if err != nil {
 		glog.Error(err)
@@ -78,6 +95,7 @@ func DecodeDERTRequest(s []byte) (*TSRequest, error) {
 	_, err := asn1.Unmarshal(s, treq)
 	return treq, err
 }
+
 func EncodeDERTCredentials(domain, username, password []byte) []byte {
 	tpas := TSPasswordCreds{domain, username, password}
 	result, err := asn1.Marshal(tpas)

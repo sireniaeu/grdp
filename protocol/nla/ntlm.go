@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/rc4"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"time"
@@ -452,7 +453,10 @@ func (n *NTLMv2) GetAuthenticateMessage(s []byte) (*AuthenticateMessage, *NTLMv2
 	encryptRC4, _ := rc4.NewCipher(ClientSealingKey)
 	decryptRC4, _ := rc4.NewCipher(ServerSealingKey)
 
-	ntlmSec := &NTLMv2Security{encryptRC4, decryptRC4, ClientSigningKey, ServerSigningKey, 0}
+	// Generate a random 32-byte nonce
+	nonce := core.Random(32)
+
+	ntlmSec := &NTLMv2Security{encryptRC4, decryptRC4, ClientSigningKey, ServerSigningKey, 0, nonce}
 
 	return n.authenticateMessage, ntlmSec
 }
@@ -470,6 +474,15 @@ type NTLMv2Security struct {
 	SigningKey []byte
 	VerifyKey  []byte
 	SeqNum     uint32
+	Nonce      []byte
+}
+
+func (n *NTLMv2Security) SHA256(s ...[]byte) []byte {
+	hash := sha256.New()
+	for _, v := range s {
+		hash.Write(v)
+	}
+	return hash.Sum(nil)
 }
 
 func (n *NTLMv2Security) GssEncrypt(s []byte) []byte {
