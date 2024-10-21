@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/tomatome/grdp/core"
 	"github.com/tomatome/grdp/emission"
 	"github.com/tomatome/grdp/glog"
@@ -102,7 +101,7 @@ func (t *TPKT) recvChallenge(data []byte) error {
 	authMsg, ntlmSec := t.ntlm.GetAuthenticateMessage(tsreq.NegoTokens[0].Data)
 	t.ntlmSec = ntlmSec
 
-	spew.Dump("version", tsreq.Version)
+	glog.Info("version", tsreq.Version)
 
 	var req []byte
 
@@ -126,9 +125,9 @@ func (t *TPKT) recvChallenge(data []byte) error {
 		clientServerHash := ntlmSec.SHA256([]byte(clientServerHashMagic), ntlmSec.Nonce, pubkey)
 		encryptedHash := ntlmSec.GssEncrypt(clientServerHash)
 
-		spew.Dump("nonce", ntlmSec.Nonce)
-		spew.Dump("clientServerHashMagic", clientServerHashMagic)
-		spew.Dump("clientServerHash", clientServerHash)
+		// spew.Dump("nonce", ntlmSec.Nonce)
+		// spew.Dump("clientServerHashMagic", clientServerHashMagic)
+		// spew.Dump("clientServerHash", clientServerHash)
 
 		req = nla.EncodeDERTRequest(credSspVersion, []nla.Message{authMsg}, nil, encryptedHash, ntlmSec.Nonce)
 
